@@ -1,5 +1,6 @@
-use std::{fmt::Display, env};
+use std::{env, error::Error, fmt::Display};
 
+#[derive(Debug)]
 pub struct Number {
     pub base: u8,
     pub value: Vec<u8>,
@@ -7,33 +8,100 @@ pub struct Number {
 
 impl Number {
     fn new(base: u8, value: Vec<u8>) -> Number {
+        let value = convert::remove_zeros(value);
         Number { base, value }
-    }
-
-    fn to_base(&mut self, base: u8) {
-        todo!()
     }
 }
 
 impl Display for Number {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Base : {}, Valeur : {:?}",
-            self.base,
-            convert::to_string(self)
-        )
+        write!(f, "{}({})", convert::to_string(self), self.base,)
     }
 }
 
-struct Config {
-    pub decimal_value: String,
-    pub base: String,
+#[derive(Debug)]
+pub enum Operation {
+    Add,
+    Convert,
+}
+
+#[derive(Debug)]
+pub struct Config {
+    pub operation: Operation,
+    pub base: Option<u8>,
+    pub number1: Number,
+    pub number2: Option<Number>,
 }
 
 impl Config {
-    pub fn new(mut args: env::Args) {
+    pub fn new(mut args: env::Args) -> Result<Config, &'static str> {
+        args.next();
 
+        let operation = match args.next() {
+            Some(op) => match op.as_str() {
+                "add" => Operation::Add,
+                "convert" => Operation::Convert,
+                _ => return Err("Unknown command"),
+            },
+            None => return Err("No command specified"),
+        };
+
+        let number1 = match (args.next(), args.next()) {
+            (Some(x), Some(base)) => {
+                convert::from_string(x, u8::from_str_radix(&base, 10).unwrap()).unwrap()
+            }
+            _ => return Err("Not enough arguments"),
+        };
+
+        let mut number2 = None;
+        let mut base = None;
+        match operation {
+            Operation::Add => {
+                number2 = match (args.next(), args.next()) {
+                    (None, None) => None,
+                    (Some(x), Some(base)) => Some(
+                        convert::from_string(x, u8::from_str_radix(&base, 10).unwrap()).unwrap(),
+                    ),
+                    _ => return Err("Not enough arguments"),
+                };
+            }
+            Operation::Convert => {
+                base = match args.next() {
+                    Some(base) => Some(u8::from_str_radix(&base, 10).unwrap()),
+                    _ => return Err("Destination base was not provided"),
+                };
+            }
+        }
+
+        Ok(Config {
+            operation,
+            number1,
+            number2,
+            base,
+        })
+    }
+}
+
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let result = process_command(&config);
+
+    match config.operation {
+        Operation::Add => println!(
+            "{} + {} = {}",
+            config.number1,
+            config.number2.unwrap(),
+            result
+        ),
+        Operation::Convert => println!("{} <=> {}", config.number1, result),
+    };
+
+    Ok(())
+}
+
+pub fn process_command(config: &Config) -> Number {
+    match config.operation {
+        Operation::Add => convert::add_number(&config.number1, config.number2.as_ref().unwrap()),
+        Operation::Convert => convert::to_base(&config.number1, config.base.unwrap()),
     }
 }
 
@@ -55,6 +123,22 @@ pub mod convert {
             }
         }
         16
+    }
+
+    pub fn remove_zeros(value: Vec<u8>) -> Vec<u8> {
+        let mut v = value[..].to_vec();
+
+        if value.len() > 1 {
+            for &i in value.iter().rev() {
+                if i != 0 || v.len() == 1 {
+                    break;
+                } else {
+                    v.pop();
+                }
+            }
+        }
+
+        v
     }
 
     pub fn to_number(nbr: u64, base: u8) -> Number {
@@ -132,7 +216,10 @@ pub mod convert {
     pub fn to_base(nbr: &Number, base: u8) -> Number {
         let base = fix_base(base);
 
-        dbg!(&nbr.value);
+        if base == nbr.base {
+            return Number::new(base, nbr.value[..].to_vec());
+        }
+
         let mut binary_rep: Vec<u8>;
 
         if nbr.base != 2 {
@@ -164,7 +251,7 @@ pub mod convert {
                 for j in 0..(ratio as u32) {
                     val += match binary_rep.get(i * ratio as usize + j as usize) {
                         Some(&val) => val * 2u8.pow(j),
-                        None => 0
+                        None => 0,
                     };
                 }
 
@@ -174,19 +261,12 @@ pub mod convert {
             value = binary_rep;
         }
 
-        Number {
-            base,
-            value,
-        }
+        Number::new(base, value)
     }
 
-    pub fn add_number(a: &Number, b: Number) -> Number {
+    pub fn add_number(a: &Number, b: &Number) -> Number {
         let base = a.base;
-        let b = if a.base != b.base {
-            to_base(&b, a.base)
-        } else {
-            b
-        };
+        let b = to_base(&b, base);
 
         let length = a.value.len().max(b.value.len());
         let mut result = vec![0u8; length + 2usize];
@@ -196,7 +276,7 @@ pub mod convert {
                 (None, None) => remainder,
                 (Some(&x), None) => x + remainder,
                 (None, Some(&y)) => y + remainder,
-                (Some(&x), Some(&y)) => x + y + remainder
+                (Some(&x), Some(&y)) => x + y + remainder,
             };
 
             remainder = val / base;
@@ -204,13 +284,30 @@ pub mod convert {
             result[i] = val % base;
         }
 
-        Number {
-            base,
-            value: result,
-        }
+        Number::new(base, result)
     }
 
+    /// Returns -1 if a < b, 0 if a == b, +1 if a > b
     pub fn cmp_number(a: &Number, b: &Number) -> i8 {
+        let base = a.base;
+        let b = to_base(b, base);
+        println!("{} {}", a, b);
+
+        if a.value.len() > b.value.len() {
+            return 1;
+        } else if a.value.len() < b.value.len() {
+            return -1;
+        }
+
+        let length = a.value.len();
+        for i in (0..length).rev() {
+            if a.value[i] > b.value[i] {
+                return 1;
+            } else if a.value[i] < b.value[i] {
+                return -1;
+            }
+        }
+
         0
     }
 }

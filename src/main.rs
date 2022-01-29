@@ -1,12 +1,15 @@
-use base_converter::convert;
+use std::{env, process};
+
+use base_converter::Config;
 
 fn main() {
-    let number = convert::to_number(165165163, 16);
-    let number1 = convert::to_number(531311, 8);
-
-    println!("{}", convert::to_uint(&convert::add_number(&number, number1)));
+    let config = Config::new(env::args()).unwrap_or_else(|e| {
+        eprintln!("Problem parsing arguments: {}", e);
+        process::exit(1);
+    });
     
-    let number = convert::to_base(&number, 8);
-
-    println!("{}", number);
+    if let Err(e) = base_converter::run(config) {
+        eprintln!("Application error: {}", e);
+        process::exit(1);
+    }
 }
