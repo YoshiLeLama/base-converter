@@ -1,15 +1,12 @@
-use base_converter::{convert, Number};
+use base_converter::convert;
 
 fn main() {
-    let number = convert::to_number(12, 2);
+    let number = convert::to_number(165165163, 16);
+    let number1 = convert::to_number(531311, 8);
 
-    println!("{}", convert::to_u64(&number));
+    println!("{}", convert::to_uint(&convert::add_number(&number, number1)));
+    
+    let number = convert::to_base(&number, 8);
 
-    let number = convert::from_string(String::from("10000000000000"), 2);
-
-    if let Some(number) = number {
-        println!("- {}", number);
-
-        println!("-- {}", convert::to_u64(&number));
-    }
+    println!("{}", number);
 }
