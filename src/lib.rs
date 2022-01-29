@@ -1,4 +1,4 @@
-use std::{fmt::Display, io::Write};
+use std::fmt::Display;
 
 pub struct Number {
     pub base: u8,
@@ -7,14 +7,15 @@ pub struct Number {
 
 impl Number {
     fn new(base: u8, value: Vec<u8>) -> Number {
-        
         Number {
             base,
             value,
         }
     }
 
-    fn to_base(&mut self, base: u8) {}
+    fn to_base(&mut self, base: u8) {
+        todo!()
+    }
 }
 
 impl Display for Number {
@@ -24,9 +25,7 @@ impl Display for Number {
 }
 
 pub mod convert {
-    use std::ptr::NonNull;
     use std::vec;
-    use std::str;
 
     use crate::Number;
 
@@ -69,7 +68,7 @@ pub mod convert {
         let mut value = 0u64;
 
         for i in 0..nbr.value.len() as u32 {
-            value += (nbr.value[i as usize] * nbr.base.pow(i)) as u64;
+            value += (nbr.value[i as usize] as u64) * (nbr.base as u64).pow(i);
         }
 
         value
@@ -88,14 +87,29 @@ pub mod convert {
     }
 
     pub fn from_string(value: String, base: u8) -> Option<Number> {
-        let mut number: Number;
+        let value = value.as_bytes();
+
+        let mut representation = vec![0u8; value.len()];
 
         let base = fix_base(base);
 
-        for (x, i) in value.as_bytes().iter(){
-            
+        for i in 0..value.len() {
+            let mut val = 0u8;
+
+            for (index, &c) in SYMBOLS.iter().enumerate() {
+                if c == value[i] {
+                    val = index as u8;
+                    break;
+                }
+            }
+
+            if val > base {
+                return None;
+            }
+
+            representation[value.len() - i - 1] = val;
         }
 
-        Ok(number)
+        Some(Number::new(base, representation))
     }
 }
