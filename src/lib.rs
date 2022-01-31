@@ -47,8 +47,16 @@ impl Config {
         };
 
         let number1 = match (args.next(), args.next()) {
+            (Some(x), Some(base)) if base == "10" => {
+                convert::to_number(u64::from_str_radix(&x, 10).unwrap(), 16)
+            },
             (Some(x), Some(base)) => {
-                convert::from_string(x, u8::from_str_radix(&base, 10).unwrap()).unwrap()
+                let base = u8::from_str_radix(&base, 10);
+
+                match base {
+                    Ok(base) if convert::is_base_valid(base) => convert::from_string(x, base).unwrap(),
+                    _ => return Err("First number parse error")
+                }
             }
             _ => return Err("Not enough arguments"),
         };
@@ -58,16 +66,30 @@ impl Config {
         match operation {
             Operation::Add => {
                 number2 = match (args.next(), args.next()) {
-                    (None, None) => None,
-                    (Some(x), Some(base)) => Some(
-                        convert::from_string(x, u8::from_str_radix(&base, 10).unwrap()).unwrap(),
-                    ),
+                    (Some(x), Some(base)) if base == "10" => {
+                        Some(convert::to_number(u64::from_str_radix(&x, 10).unwrap(), 16))
+                    },
+                    (Some(x), Some(base)) => {
+                        let base = u8::from_str_radix(&base, 10);
+        
+                        match base {
+                            Ok(base) if convert::is_base_valid(base) => Some(convert::from_string(x, base).unwrap()),
+                            _ => return Err("Second number parse error")
+                        }
+                    }
                     _ => return Err("Not enough arguments"),
                 };
             }
             Operation::Convert => {
                 base = match args.next() {
-                    Some(base) => Some(u8::from_str_radix(&base, 10).unwrap()),
+                    Some(base) => {
+                        let base = u8::from_str_radix(&base, 10);
+        
+                        match base {
+                            Ok(base) if convert::is_base_valid(base) => Some(base),
+                            _ => return Err("Destination base parsing error")
+                        }
+                    },
                     _ => return Err("Destination base was not provided"),
                 };
             }
@@ -87,12 +109,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
     match config.operation {
         Operation::Add => println!(
-            "{} + {} = {}",
-            config.number1,
-            config.number2.unwrap(),
+            "{}",
             result
         ),
-        Operation::Convert => println!("{} <=> {}", config.number1, result),
+        Operation::Convert => println!("{}", result),
     };
 
     Ok(())
@@ -112,6 +132,19 @@ pub mod convert {
 
     pub static SYMBOLS: &[u8] =
         "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/".as_bytes();
+
+    pub fn is_base_valid(base: u8) -> bool {
+        let mut test_base = 2;
+        while test_base <= 64 {
+            if test_base == base {
+                return true;
+            } else {
+                test_base *= 2;
+            }
+        }
+
+        false
+    }
 
     pub fn fix_base(base: u8) -> u8 {
         let mut test_base = 2;
